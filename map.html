@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArcGIS Distance Measurement</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.26/"></script>
+    <style>
+        html, body, #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewDiv"></div>
+    <script>
+        require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/Graphic",
+            "esri/geometry/Polyline",
+            "esri/geometry/geometryEngine",
+            "esri/widgets/Sketch",
+            "esri/layers/GraphicsLayer"
+        ], function(Map, MapView, Graphic, Polyline, geometryEngine, Sketch, GraphicsLayer) {
+
+            const map = new Map({
+                basemap: "streets-navigation-vector"
+            });
+
+            const view = new MapView({
+                container: "viewDiv",
+                map: map,
+                center: [-118.805, 34.027],
+                zoom: 13
+            });
+
+            const graphicsLayer = new GraphicsLayer();
+            map.add(graphicsLayer);
+
+            let points = [];
+
+            const sketch = new Sketch({
+                view: view,
+                layer: graphicsLayer,
+                creationMode: "update"
+            });
+
+            view.ui.add(sketch, "top-right");
+
+            view.on("click", function(event) {
+                const point = {
+                    type: "point",
+                    longitude: event.mapPoint.longitude,
+                    latitude: event.mapPoint.latitude
+                };
+
+                points.push(point);
+
+                const pointGraphic = new Graphic({
+                    geometry: point,
+                    symbol: {
+                        type: "simple-marker",
+                        color: "red",
+                        size: "8px"
+                    }
+                });
+
+                graphicsLayer.add(pointGraphic);
+
+                if (points.length === 2) {
+                    calculateDistance();
+                }
+            });
+
+            function calculateDistance() {
+                if (points.length === 2) {
+                    const [point1, point2] = points;
+
+                    // Create the polyline with a spatial reference
+                    const line = {
+                        type: "polyline",
+                        paths: [
+                            [point1.longitude, point1.latitude],
+                            [point2.longitude, point2.latitude]
+                        ],
+                        spatialReference: { wkid: 4326 } // WGS 84 spatial reference
+                    };
+
+                    // Calculate geodesic distance
+                    const polyline = new Polyline(line);
+                    const geodesicDistance = geometryEngine.geodesicLength(polyline, "kilometers");
+
+                    if (!isNaN(geodesicDistance)) {
+                        // Add a text graphic displaying the distance
+                        const distanceText = new Graphic({
+                            geometry: point2,
+                            symbol: {
+                                type: "text",
+                                color: "black",
+                                haloColor: "white",
+                                haloSize: "1px",
+                                text: geodesicDistance.toFixed(2) + " km",
+                                xoffset: 3,
+                                yoffset: 3,
+                                font: { size: 12 }
+                            }
+                        });
+                        graphicsLayer.add(distanceText);
+                    } else {
+                        console.error("Geodesic distance calculation failed.");
+                    }
+
+                    // Reset points array
+                    points = [];
+                }
+            }
+        });
+    </script>
+</body>
+</html>
